@@ -8,22 +8,13 @@
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, push, set, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+    import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-    // Firebase-Konfiguration (ersetze mit deinen echten Daten)
-    const firebaseConfig = {
-      apiKey: "DEIN_API_KEY",
-      authDomain: "DEIN_PROJECT_ID.firebaseapp.com",
-      databaseURL: "https://DEIN_PROJECT_ID.firebaseio.com",
-      projectId: "DEIN_PROJECT_ID",
-      storageBucket: "DEIN_PROJECT_ID.appspot.com",
-      messagingSenderId: "DEIN_MESSAGING_SENDER_ID",
-      appId: "DEINE_APP_ID"
-    };
+    // Supabase-Konfiguration (ersetze mit deinen echten Daten)
+    const SUPABASE_URL = 'https://mdpzjgxlrkchireszcnl.supabase.co';
+    const SUPABASE_ANON_KEY = 'SUPABASE_CLIENT_API_KEY'; // Ersetze mit deinem Supabase Anon Key
 
-    const app = initializeApp(firebaseConfig);
-    const database = getDatabase(app);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let calendar;
     let selectedDate = null;
@@ -59,93 +50,96 @@
         return;
       }
 
-      const dateRef = ref(database, `reservations/${selectedDate}`);
+      try {
+        // Prüfen, ob für den Tag bereits 2 Reservierungen vorhanden sind
+        const { data: existingReservations, error: fetchError } = await supabase
+          .from('reservations')
+          .select('*')
+          .eq('date', selectedDate);
 
-      onValue(dateRef, (snapshot) => {
-        const data = snapshot.val() || {};
-        const reservationsCount = Object.keys(data).length;
-        const slotTaken = Object.values(data).some(res => res.timeSlot === timeSlot);
+        if (fetchError) throw fetchError;
 
-        if (reservationsCount >= 2) {
+        if (existingReservations.length >= 2) {
           alert('Maximal 2 Reservierungen pro Tag möglich.');
           return;
         }
 
+        const slotTaken = existingReservations.some(res => res.time_slot === timeSlot);
         if (slotTaken) {
           alert(`Das Zeitfenster "${timeSlot}" ist an diesem Tag bereits reserviert.`);
           return;
         }
 
-        const newRef = push(dateRef);
+        const color = getColorForUser(userName);
         const reservation = {
-          id: newRef.key,
-          userName,
-          timeSlot,
-          color: getColorForUser(userName),
+          user_name: userName,
+          time_slot: timeSlot,
+          date: selectedDate,
+          color,
           start: timeSlot === 'Vormittag' ? `${selectedDate}T08:00:00` : `${selectedDate}T13:00:00`,
           end: timeSlot === 'Vormittag' ? `${selectedDate}T12:00:00` : `${selectedDate}T17:00:00`,
         };
 
-        set(newRef, reservation)
-          .then(() => {
-            calendar.addEvent({
-              id: reservation.id,
-              title: `${reservation.userName} - ${reservation.timeSlot}`,
-              start: reservation.start,
-              end: reservation.end,
-              backgroundColor: reservation.color,
-              borderColor: reservation.color,
-              extendedProps: { timeSlot: reservation.timeSlot, userName: reservation.userName }
-            });
-            alert('Reservierung erfolgreich gespeichert.');
-            closeModal();
-          })
-          .catch((error) => {
-            console.error('Fehler beim Speichern:', error);
-            alert('Fehler beim Speichern der Reservierung. Bitte versuche es erneut.');
-          });
-      }, { onlyOnce: true });
+        const { error: insertError } = await supabase.from('reservations').insert([reservation]);
+        if (insertError) throw insertError;
+
+        calendar.addEvent({
+          title: `${reservation.user_name} - ${reservation.time_slot}`,
+          start: reservation.start,
+          end: reservation.end,
+          backgroundColor: reservation.color,
+          borderColor: reservation.color,
+          extendedProps: { timeSlot: reservation.time_slot, userName: reservation.user_name }
+        });
+
+        alert('Reservierung erfolgreich gespeichert.');
+        closeModal();
+      } catch (error) {
+        console.error('Fehler beim Speichern:', error);
+        alert('Fehler beim Speichern der Reservierung. Bitte versuche es erneut.');
+      }
     };
 
-    const loadReservations = () => {
-      const reservationsRef = ref(database, 'reservations/');
+    const loadReservations = async () => {
+      try {
+        const { data, error } = await supabase.from('reservations').select('*');
+        if (error) throw error;
 
-      onValue(reservationsRef, (snapshot) => {
         calendar.removeAllEvents();
-        const data = snapshot.val();
-
-        if (data) {
-          Object.entries(data).forEach(([date, events]) => {
-            Object.values(events).forEach(event => {
-              calendar.addEvent({
-                id: event.id,
-                title: `${event.userName} - ${event.timeSlot}`,
-                start: event.start,
-                end: event.end,
-                backgroundColor: event.color,
-                borderColor: event.color,
-                extendedProps: { timeSlot: event.timeSlot, userName: event.userName }
-              });
-            });
+        data.forEach(event => {
+          calendar.addEvent({
+            title: `${event.user_name} - ${event.time_slot}`,
+            start: event.start,
+            end: event.end,
+            backgroundColor: event.color,
+            borderColor: event.color,
+            extendedProps: { timeSlot: event.time_slot, userName: event.user_name }
           });
-        }
-      });
+        });
+      } catch (error) {
+        console.error('Fehler beim Laden der Reservierungen:', error);
+        alert('Fehler beim Laden der Reservierungen.');
+      }
     };
 
-    const deleteReservation = (event) => {
-      if (confirm(`Reservierung von "${event.title}" löschen?`)) {
-        const date = event.startStr.split('T')[0];
-        const eventRef = ref(database, `reservations/${date}/${event.id}`);
+    const deleteReservation = async (event) => {
+      if (!confirm(`Reservierung von "${event.title}" löschen?`)) return;
 
-        remove(eventRef)
-          .then(() => {
-            event.remove();
-            alert('Reservierung erfolgreich gelöscht.');
-          })
-          .catch((error) => {
-            console.error('Fehler beim Löschen:', error);
-            alert('Fehler beim Löschen der Reservierung.');
-          });
+      try {
+        const { error } = await supabase
+          .from('reservations')
+          .delete()
+          .eq('date', event.startStr.split('T')[0])
+          .eq('user_name', event.extendedProps.userName)
+          .eq('time_slot', event.extendedProps.timeSlot);
+
+        if (error) throw error;
+
+        event.remove();
+        alert('Reservierung erfolgreich gelöscht.');
+      } catch (error) {
+        console.error('Fehler beim Löschen:', error);
+        alert('Fehler beim Löschen der Reservierung.');
       }
     };
 
