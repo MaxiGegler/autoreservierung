@@ -6,6 +6,122 @@
   <title>Autoreservierung</title>
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
+  <script type="module">
+    // Importiere Firebase-Module
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
+    import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-database.js";
+
+    // Firebase-Konfiguration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBC_QDxy1EYY1yE2VEHuLseSn-jWVHRwv4",
+      authDomain: "autoreservierung-9f430.firebaseapp.com",
+      projectId: "autoreservierung-9f430",
+      storageBucket: "autoreservierung-9f430.appspot.com",
+      messagingSenderId: "634798846144",
+      appId: "1:634798846144:web:4683a962008bb4f65a3d25",
+      measurementId: "G-72BR0MSRJ6",
+      databaseURL: "https://autoreservierung-9f430-default-rtdb.europe-west1.firebasedatabase.app/"
+    };
+
+    // Firebase initialisieren
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    let calendar;
+    let selectedDate = null;
+
+    // Lade Events aus Firebase und aktualisiere den Kalender in Echtzeit
+    function loadEventsFromFirebase() {
+      const eventsRef = ref(db, "reservierungen");
+      onValue(eventsRef, (snapshot) => {
+        const events = snapshot.val();
+        calendar.getEvents().forEach(event => event.remove()); // Alte Events löschen
+        if (events) {
+          Object.values(events).forEach(event => {
+            calendar.addEvent(event);
+          });
+        }
+      });
+    }
+
+    // Speichere ein Event in Firebase
+    function saveEventToFirebase(event) {
+      const eventRef = ref(db, `reservierungen/${event.id}`);
+      set(eventRef, event).then(() => {
+        alert("Reservierung gespeichert!");
+      }).catch(() => {
+        alert("Fehler beim Speichern der Reservierung.");
+      });
+    }
+
+    // Lösche ein Event aus Firebase
+    function deleteEventFromFirebase(eventId) {
+      const eventRef = ref(db, `reservierungen/${eventId}`);
+      remove(eventRef).then(() => {
+        alert("Reservierung gelöscht!");
+      }).catch(() => {
+        alert("Fehler beim Löschen der Reservierung.");
+      });
+    }
+
+    // Öffnet das Reservierungs-Modal
+    function openModal(date) {
+      selectedDate = date;
+      document.getElementById('modalOverlay').style.display = 'block';
+      document.getElementById('reservationModal').style.display = 'block';
+    }
+
+    // Schließt das Reservierungs-Modal
+    function closeModal() {
+      document.getElementById('modalOverlay').style.display = 'none';
+      document.getElementById('reservationModal').style.display = 'none';
+      document.getElementById('userName').value = '';
+    }
+
+    // Speichert die Reservierung in den Kalender und Firebase
+    function saveReservation() {
+      const userName = document.getElementById('userName').value.trim();
+      const eventColor = document.getElementById('eventColor').value;
+
+      if (!userName || !selectedDate) {
+        alert('Bitte geben Sie Ihren Namen ein.');
+        return;
+      }
+
+      const newEvent = {
+        id: Date.now().toString(),
+        title: userName,
+        start: selectedDate,
+        allDay: true,
+        backgroundColor: eventColor,
+        borderColor: eventColor,
+      };
+
+      calendar.addEvent(newEvent);
+      saveEventToFirebase(newEvent);
+      closeModal();
+    }
+
+    // Initialisiere den Kalender nach dem Laden des DOMs
+    document.addEventListener('DOMContentLoaded', function () {
+      calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+        initialView: 'dayGridMonth',
+        selectable: true,
+        dateClick: function (info) {
+          openModal(info.dateStr);
+        },
+        eventClick: function (info) {
+          if (confirm(`Reservierung von "${info.event.title}" löschen?`)) {
+            info.event.remove();
+            deleteEventFromFirebase(info.event.id);
+          }
+        },
+      });
+      calendar.render();
+      loadEventsFromFirebase();
+    });
+  </script>
+
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -68,93 +184,5 @@
     <button onclick="saveReservation()">Reservieren</button>
     <button onclick="closeModal()">Abbrechen</button>
   </div>
-
-  <script>
-    let calendar;
-    let events = [];
-    let selectedDate = null;
-
-    // Lade gespeicherte Events aus localStorage (Simulation einer JSON-Datei)
-    function loadEvents() {
-      const savedEvents = localStorage.getItem('events');
-      events = savedEvents ? JSON.parse(savedEvents) : [];
-    }
-
-    // Speichere Events in localStorage
-    function saveEvents() {
-      localStorage.setItem('events', JSON.stringify(events));
-    }
-
-    // Modal öffnen
-    function openModal(date) {
-      selectedDate = date;
-      document.getElementById('modalOverlay').style.display = 'block';
-      document.getElementById('reservationModal').style.display = 'block';
-    }
-
-    // Modal schließen
-    function closeModal() {
-      selectedDate = null;
-      document.getElementById('modalOverlay').style.display = 'none';
-      document.getElementById('reservationModal').style.display = 'none';
-      document.getElementById('userName').value = '';
-    }
-
-    // Reservierung speichern
-    function saveReservation() {
-      const userName = document.getElementById('userName').value.trim();
-      const eventColor = document.getElementById('eventColor').value;
-
-      if (!userName || !selectedDate) {
-        alert('Bitte geben Sie Ihren Namen ein.');
-        return;
-      }
-
-      // Prüfe, ob der Tag bereits reserviert ist
-      const existingEvent = events.find(event => event.start === selectedDate);
-      if (existingEvent) {
-        alert('Dieser Tag ist bereits reserviert.');
-        return;
-      }
-
-      const newEvent = {
-        id: Date.now().toString(),
-        title: userName,
-        start: selectedDate,
-        allDay: true,
-        backgroundColor: eventColor,
-        borderColor: eventColor,
-      };
-
-      events.push(newEvent);
-      saveEvents();
-      calendar.addEvent(newEvent);
-      closeModal();
-      alert('Reservierung erfolgreich!');
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-      loadEvents();
-
-      calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
-        initialView: 'dayGridMonth',
-        selectable: true,
-        events: events,
-        dateClick: function (info) {
-          openModal(info.dateStr);
-        },
-        eventClick: function (info) {
-          if (confirm(`Reservierung von "${info.event.title}" löschen?`)) {
-            events = events.filter(event => event.id !== info.event.id);
-            saveEvents();
-            info.event.remove();
-            alert('Reservierung gelöscht.');
-          }
-        },
-      });
-
-      calendar.render();
-    });
-  </script>
 </body>
 </html>
