@@ -5,15 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Autoreservierung</title>
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
+      text-align: center;
     }
 
     #calendar {
       max-width: 800px;
-      margin: 0 auto;
+      margin: 20px auto;
     }
 
     .modal {
@@ -28,6 +30,8 @@
       border-radius: 8px;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
       z-index: 1000;
+      width: 90%;
+      max-width: 400px;
     }
 
     .modal input,
@@ -35,6 +39,7 @@
       width: 100%;
       padding: 10px;
       margin: 5px 0;
+      border-radius: 5px;
     }
 
     .modal-overlay {
@@ -58,32 +63,36 @@
   <div class="modal" id="reservationModal">
     <h3>Reservierung hinzufügen</h3>
     <input type="text" id="userName" placeholder="Ihr Name" required />
+    <label for="eventColor">Farbe wählen:</label>
     <input type="color" id="eventColor" value="#3788d8" />
     <button onclick="saveReservation()">Reservieren</button>
     <button onclick="closeModal()">Abbrechen</button>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
   <script>
     let calendar;
     let events = [];
     let selectedDate = null;
 
+    // Lade gespeicherte Events aus localStorage (Simulation einer JSON-Datei)
     function loadEvents() {
       const savedEvents = localStorage.getItem('events');
       events = savedEvents ? JSON.parse(savedEvents) : [];
     }
 
+    // Speichere Events in localStorage
     function saveEvents() {
       localStorage.setItem('events', JSON.stringify(events));
     }
 
+    // Modal öffnen
     function openModal(date) {
       selectedDate = date;
       document.getElementById('modalOverlay').style.display = 'block';
       document.getElementById('reservationModal').style.display = 'block';
     }
 
+    // Modal schließen
     function closeModal() {
       selectedDate = null;
       document.getElementById('modalOverlay').style.display = 'none';
@@ -91,12 +100,20 @@
       document.getElementById('userName').value = '';
     }
 
+    // Reservierung speichern
     function saveReservation() {
       const userName = document.getElementById('userName').value.trim();
       const eventColor = document.getElementById('eventColor').value;
 
       if (!userName || !selectedDate) {
         alert('Bitte geben Sie Ihren Namen ein.');
+        return;
+      }
+
+      // Prüfe, ob der Tag bereits reserviert ist
+      const existingEvent = events.find(event => event.start === selectedDate);
+      if (existingEvent) {
+        alert('Dieser Tag ist bereits reserviert.');
         return;
       }
 
@@ -118,9 +135,8 @@
 
     document.addEventListener('DOMContentLoaded', function () {
       loadEvents();
-      const calendarEl = document.getElementById('calendar');
 
-      calendar = new FullCalendar.Calendar(calendarEl, {
+      calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
         initialView: 'dayGridMonth',
         selectable: true,
         events: events,
@@ -129,7 +145,7 @@
         },
         eventClick: function (info) {
           if (confirm(`Reservierung von "${info.event.title}" löschen?`)) {
-            events = events.filter(e => e.id !== info.event.id);
+            events = events.filter(event => event.id !== info.event.id);
             saveEvents();
             info.event.remove();
             alert('Reservierung gelöscht.');
