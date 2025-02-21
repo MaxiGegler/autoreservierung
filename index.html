@@ -4,126 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Autoreservierung</title>
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet" />
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
-  <script type="module">
-    // Firebase Module importieren
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
-    import { getDatabase, ref, onValue, set, remove } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-database.js";
-
-    // Firebase Konfiguration
-    const firebaseConfig = {
-      apiKey: "AIzaSyBC_QDxy1EYY1yE2VEHuLseSn-jWVHRwv4",
-      authDomain: "autoreservierung-9f430.firebaseapp.com",
-      projectId: "autoreservierung-9f430",
-      storageBucket: "autoreservierung-9f430.appspot.com",
-      messagingSenderId: "634798846144",
-      appId: "1:634798846144:web:4683a962008bb4f65a3d25",
-      measurementId: "G-72BR0MSRJ6",
-      databaseURL: "https://autoreservierung-9f430-default-rtdb.europe-west1.firebasedatabase.app/"
-    };
-
-    // Firebase initialisieren
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    let calendar;
-    let selectedDate = null;
-
-    // Lade Events aus Firebase
-    function loadEventsFromFirebase() {
-      const eventsRef = ref(db, "reservierungen");
-      onValue(eventsRef, (snapshot) => {
-        calendar.getEvents().forEach(event => event.remove()); // Vorherige Events löschen
-        const events = snapshot.val();
-        if (events) {
-          Object.values(events).forEach(event => {
-            calendar.addEvent(event);
-          });
-        }
-      });
-    }
-
-    // Event in Firebase speichern
-    function saveEventToFirebase(event) {
-      const eventRef = ref(db, `reservierungen/${event.id}`);
-      set(eventRef, event).catch(() => {
-        alert("Fehler beim Speichern der Reservierung.");
-      });
-    }
-
-    // Event aus Firebase löschen
-    function deleteEventFromFirebase(eventId) {
-      const eventRef = ref(db, `reservierungen/${eventId}`);
-      remove(eventRef).catch(() => {
-        alert("Fehler beim Löschen der Reservierung.");
-      });
-    }
-
-    // Modal öffnen
-    function openModal(date) {
-      selectedDate = date;
-      document.getElementById('modalOverlay').style.display = 'block';
-      document.getElementById('reservationModal').style.display = 'block';
-    }
-
-    // Modal schließen
-    function closeModal() {
-      document.getElementById('modalOverlay').style.display = 'none';
-      document.getElementById('reservationModal').style.display = 'none';
-      document.getElementById('userName').value = '';
-    }
-
-    // Reservierung speichern
-    function saveReservation() {
-      const userName = document.getElementById('userName').value.trim();
-      const eventColor = document.getElementById('eventColor').value;
-
-      if (!userName || !selectedDate) {
-        alert('Bitte geben Sie Ihren Namen ein.');
-        return;
-      }
-
-      const newEvent = {
-        id: Date.now().toString(),
-        title: userName,
-        start: selectedDate,
-        allDay: true,
-        backgroundColor: eventColor,
-        borderColor: eventColor,
-      };
-
-      calendar.addEvent(newEvent);
-      saveEventToFirebase(newEvent);
-      closeModal();
-    }
-
-    // Kalender initialisieren
-    document.addEventListener('DOMContentLoaded', function () {
-      const calendarEl = document.getElementById('calendar');
-      if (!calendarEl) {
-        console.error('Kalenderelement nicht gefunden. Stelle sicher, dass das div mit der ID "calendar" existiert.');
-        return;
-      }
-
-      calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView: 'dayGridMonth',
-        selectable: true,
-        dateClick: function (info) {
-          openModal(info.dateStr);
-        },
-        eventClick: function (info) {
-          if (confirm(`Reservierung von "${info.event.title}" löschen?`)) {
-            info.event.remove();
-            deleteEventFromFirebase(info.event.id);
-          }
-        },
-      });
-
-      calendar.render();
-      loadEventsFromFirebase();
-    });
-  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
 
   <style>
     body {
@@ -186,5 +68,74 @@
     <button onclick="saveReservation()">Reservieren</button>
     <button onclick="closeModal()">Abbrechen</button>
   </div>
+
+  <script>
+    let calendar;
+    let selectedDate = null;
+
+    function openModal(date) {
+      selectedDate = date;
+      document.getElementById('modalOverlay').style.display = 'block';
+      document.getElementById('reservationModal').style.display = 'block';
+    }
+
+    function closeModal() {
+      document.getElementById('modalOverlay').style.display = 'none';
+      document.getElementById('reservationModal').style.display = 'none';
+      document.getElementById('userName').value = '';
+    }
+
+    function saveReservation() {
+      const userName = document.getElementById('userName').value.trim();
+      const eventColor = document.getElementById('eventColor').value;
+
+      if (!userName || !selectedDate) {
+        alert('Bitte geben Sie Ihren Namen ein.');
+        return;
+      }
+
+      const newEvent = {
+        id: Date.now().toString(),
+        title: userName,
+        start: selectedDate,
+        allDay: true,
+        backgroundColor: eventColor,
+        borderColor: eventColor,
+      };
+
+      calendar.addEvent(newEvent);
+      closeModal();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const calendarEl = document.getElementById('calendar');
+
+      if (!calendarEl) {
+        console.error('Kalenderelement nicht gefunden. Überprüfe die ID "calendar" im HTML.');
+        return;
+      }
+
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        selectable: true,
+        dateClick: function (info) {
+          openModal(info.dateStr);
+        },
+        eventClick: function (info) {
+          if (confirm(`Reservierung von "${info.event.title}" löschen?`)) {
+            info.event.remove();
+          }
+        },
+    
+      });
+
+      calendar.render();
+    });
+  </script>
 </body>
 </html>
